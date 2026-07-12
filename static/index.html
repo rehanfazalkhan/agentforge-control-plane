@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0b1120" />
+    <title>AgentForge Control Plane</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">GOVERNED AGENT OPERATIONS</p>
+          <h1>AgentForge <span>Control Plane</span></h1>
+          <p class="lede">A transparent multi-agent system with policy-gated tools, trace-level observability, and automated release-quality evaluations.</p>
+        </div>
+        <div class="environment"><i></i> Local demo environment</div>
+      </section>
+
+      <section class="metric-grid" aria-label="Operational summary">
+        <article><p>Total runs</p><strong id="totalRuns">0</strong><small>Current session</small></article>
+        <article><p>Success rate</p><strong id="successRate">--</strong><small>Completed workflows</small></article>
+        <article><p>Evaluation pass</p><strong id="evalRate">--</strong><small>Release gates</small></article>
+        <article><p>Policy blocks</p><strong id="policyBlocks">0</strong><small>Before tool execution</small></article>
+      </section>
+
+      <section class="workspace">
+        <article class="panel ask-panel">
+          <div class="panel-heading">
+            <div><p class="eyebrow">SUPERVISOR REQUEST</p><h2>Run a governed workflow</h2></div>
+            <span class="live-label">Trace enabled</span>
+          </div>
+          <form id="runForm">
+            <label for="question">Operational question</label>
+            <textarea id="question" maxlength="1000" required>Investigate the agent runtime latency incident and recommend the next safe action.</textarea>
+            <div class="form-row">
+              <label for="actorRole">Actor role
+                <select id="actorRole"><option value="operator">Operator</option><option value="analyst">Analyst</option><option value="admin">Admin</option></select>
+              </label>
+              <button id="runButton" type="submit">Run agent workflow <span>→</span></button>
+            </div>
+          </form>
+          <div class="quick-prompts">
+            <button data-prompt="Investigate runtime latency incident" data-role="operator">Investigate incident</button>
+            <button data-prompt="What is our cloud spend forecast?" data-role="analyst">Check cost forecast</button>
+            <button data-prompt="Show access review status" data-role="admin">Review access</button>
+          </div>
+        </article>
+
+        <article class="panel result-panel" aria-live="polite">
+          <div class="panel-heading"><div><p class="eyebrow">LATEST RESPONSE</p><h2 id="resultTitle">Awaiting a run</h2></div><span id="statusBadge" class="status neutral">Ready</span></div>
+          <p id="responseText" class="response">Submit an operational question to watch the supervisor route it, enforce the gateway policy, and score the result.</p>
+          <div id="citationList" class="citations"></div>
+          <div id="evaluationList" class="evaluation-list"></div>
+        </article>
+      </section>
+
+      <section class="lower-grid">
+        <article class="panel trace-panel">
+          <div class="panel-heading"><div><p class="eyebrow">OPEN TELEMETRY-STYLE TRACE</p><h2>Execution path</h2></div><span id="latency">-- ms</span></div>
+          <ol id="traceList" class="trace-list"><li class="empty">No trace yet.</li></ol>
+        </article>
+        <article class="panel tool-panel">
+          <div class="panel-heading"><div><p class="eyebrow">MCP TOOL GATEWAY</p><h2>Governed capabilities</h2></div></div>
+          <div id="toolList" class="tool-list"></div>
+        </article>
+      </section>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
