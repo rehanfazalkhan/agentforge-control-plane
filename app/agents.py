@@ -1,11 +1,12 @@
-"""Supervisor routing and specialized agents for the control-plane demo."""
+"""Development engine and shared result model for agent execution."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+from .auth import Principal
 from .models import ToolCall
-from .tools import invoke_tool
+from .tools import ToolExecutor
 
 
 @dataclass
@@ -14,6 +15,8 @@ class AgentResult:
     response: str
     citations: list[str]
     tool_calls: list[ToolCall]
+    model_id: str | None = None
+    token_usage: dict[str, int] = field(default_factory=dict)
 
 
 def choose_route(question: str) -> str:
@@ -27,47 +30,37 @@ def choose_route(question: str) -> str:
     return "operations"
 
 
-def execute_specialist(question: str, actor_role: str) -> AgentResult:
-    """Route to one bounded specialist; tools remain policy-governed."""
+def execute_development_specialist(question: str, principal: Principal, tools: ToolExecutor) -> AgentResult:
+    """Deterministic local engine used only for development and contract tests."""
     route = choose_route(question)
     if route == "finops":
-        call = invoke_tool(actor_role, "get_cost_forecast", {})
+        call = tools.invoke(principal, "get_cost_forecast", {})
         data = call.output
         variance = data["forecast_usd"] - data["budget_usd"]
-        response = (
-            f"Forecasted monthly spend is ${data['forecast_usd']:,}, which is "
-            f"${variance:,} above the ${data['budget_usd']:,} budget. The main driver is "
-            f"{data['largest_driver']}. Recommend reviewing model routing and setting a "
-            "daily spend alert before changing production limits."
+        return AgentResult(
+            route, f"Forecasted monthly spend is ${data['forecast_usd']:,}, ${variance:,} above budget. "
+            f"The leading driver is {data['largest_driver']}. Recommend reviewing model routing and setting a daily spend alert before changing production limits.",
+            ["FinOps ledger fixture"], [call], model_id="development-engine",
         )
-        return AgentResult(route, response, ["FinOps ledger: July demo snapshot"], [call])
-
     if route == "security":
-        call = invoke_tool(actor_role, "get_access_review", {})
+        call = tools.invoke(principal, "get_access_review", {})
         data = call.output
-        response = (
-            f"{data['overdue_reviews']} privileged access reviews are overdue: "
-            f"{', '.join(data['roles'])}. {data['action']} No access changes were made."
-            " Recommend assigning the review to the designated application owner today."
+        return AgentResult(
+            route, f"{data['overdue_reviews']} privileged reviews are overdue: {', '.join(data['roles'])}. "
+            f"{data['action']} Recommend assigning the review to the designated application owner today.",
+            ["Identity governance fixture"], [call], model_id="development-engine",
         )
-        return AgentResult(route, response, ["Identity governance register"], [call])
-
     if route == "incident":
-        health = invoke_tool(actor_role, "get_service_health", {"service": "agent-runtime"})
-        runbook = invoke_tool(actor_role, "search_runbook", {"query": "runtime timeout"})
+        health = tools.invoke(principal, "get_service_health", {"service": "agent-runtime"})
+        runbook = tools.invoke(principal, "search_runbook", {"query": "runtime timeout"})
         data = health.output
-        response = (
-            f"The agent runtime is {data['status']} with {data['error_rate']} errors and "
-            f"p95 latency of {data['p95_latency_ms']} ms. {data['signal']} "
-            "Recommended next step: confirm dependency health and recent deploys; do not "
-            "reduce concurrency unless the error rate exceeds 5%."
+        return AgentResult(
+            route, f"The agent runtime is {data['status']} with {data['error_rate']} errors and p95 latency of {data['p95_latency_ms']} ms. "
+            f"{data['signal']} Recommend confirming dependency health and recent deploys; do not reduce concurrency unless the error rate exceeds 5%.",
+            [str(runbook.output["source"])], [health, runbook], model_id="development-engine",
         )
-        return AgentResult(route, response, [runbook.output["source"]], [health, runbook])
-
-    call = invoke_tool(actor_role, "search_runbook", {"query": question})
-    response = (
-        "I routed this to Operations. The approved runbook is 'Runtime timeout response'. "
-        "Start by confirming dependency health and recent deploys, then escalate after "
-        "30 minutes or a customer-impacting SLA breach."
+    call = tools.invoke(principal, "search_runbook", {"query": question})
+    return AgentResult(
+        route, "The approved runbook is 'Runtime timeout response'. Start by confirming dependency health and recent deploys, then escalate after 30 minutes or a customer-impacting SLA breach. Recommend documenting the decision in the incident record.",
+        [str(call.output["source"])], [call], model_id="development-engine",
     )
-    return AgentResult(route, response, [call.output["source"]], [call])
