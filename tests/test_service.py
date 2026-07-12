@@ -40,3 +40,10 @@ def test_agentcore_style_invocation_endpoint() -> None:
     assert response.status_code == 200
     assert response.json()["route"] == "finops"
     assert response.json()["status"] == "completed"
+
+
+def test_readiness_endpoint_exposes_development_runtime_status() -> None:
+    response = TestClient(app).get("/readyz")
+
+    assert response.status_code == 200
+    assert response.json()["runtime_mode"] == "development"
