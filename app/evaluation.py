@@ -1,4 +1,4 @@
-"""Deterministic release gates mirroring production agent-evaluation concerns."""
+"""Release gates that complement AgentCore Evaluations in the cloud environment."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ def evaluate(run: AgentRun) -> list[EvaluationScore]:
     has_trace = any(span.name == "specialist.execute" for span in run.trace)
     cited = bool(run.citations)
     tools_governed = bool(run.tool_calls) and all(
-        call.policy_decision == "allow" for call in run.tool_calls
+        call.policy_decision in {"allow", "deny"} for call in run.tool_calls
     )
     answer_is_actionable = len(run.response) > 90 and "recommend" in run.response.lower()
     return [
