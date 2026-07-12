@@ -44,12 +44,17 @@ class EvaluationScore(BaseModel):
 class RunRequest(BaseModel):
     question: str = Field(min_length=3, max_length=1000)
     actor_role: str = Field(default="operator", pattern="^(operator|analyst|admin)$")
+    session_id: str | None = Field(default=None, max_length=128)
 
 
 class AgentRun(BaseModel):
     id: str
     question: str
+    actor_id: str
     actor_role: str
+    session_id: str | None = None
+    runtime_mode: str
+    model_id: str | None = None
     created_at: datetime = Field(default_factory=utc_now)
     status: RunStatus
     route: str
@@ -58,6 +63,7 @@ class AgentRun(BaseModel):
     tool_calls: list[ToolCall] = Field(default_factory=list)
     trace: list[TraceSpan] = Field(default_factory=list)
     evaluations: list[EvaluationScore] = Field(default_factory=list)
+    token_usage: dict[str, int] = Field(default_factory=dict)
     latency_ms: int = Field(ge=0)
 
 
