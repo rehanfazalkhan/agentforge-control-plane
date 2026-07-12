@@ -1,69 +1,86 @@
 # AgentForge Control Plane
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
+![Amazon Bedrock](https://img.shields.io/badge/AWS-Bedrock%20AgentCore-FF9900?logo=amazonaws&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)
-![License](https://img.shields.io/badge/license-MIT-43dfc5)
 
-An end-to-end, safe-to-demo control plane for governed multi-agent operations. A supervisor selects a bounded specialist, every tool call passes a centralized policy gate, and every run is traced and evaluated before it can be considered successful.
+A production-grade multi-agent control plane for secure operational workflows. AgentForge uses a real Amazon Bedrock Converse agent loop in production, verifies caller identity, authorizes every tool invocation, persists execution records, emits structured audit telemetry, and evaluates every run.
 
-This is a **local, deterministic demo**. It does not call a model, use production data, or create cloud infrastructure. It is designed to be easy to run during an interview or portfolio review, while preserving a deliberate path to Amazon Bedrock AgentCore.
+It is engineered to run locally for contract testing and to deploy to Amazon Bedrock AgentCore once an AWS account, model access, identity provider, and approved tool targets are configured. This repository never claims an AWS deployment that has not actually been performed.
 
-## Why this project
+## Capabilities
 
-Most agent demos stop at a chat interface. AgentForge demonstrates the operational capabilities enterprise teams need around an agent:
-
-- Multi-agent routing for incident, FinOps, security, and operations workflows
-- MCP-style tool registry with role-based, centralized authorization
-- Prompt-injection detection before routing or tool execution
-- Trace-level visibility into policy, supervisor, agent, and tool steps
-- Automated evaluation gates for safety, groundedness, tool governance, and actionability
-- A polished dashboard and an API suitable for integration testing
+- **Real model runtime:** production mode calls Amazon Bedrock through the Converse API, including bounded multi-turn tool use.
+- **Secure identity boundary:** production requests require JWT verification; roles are derived from claims, never request bodies.
+- **Governed tools:** tool contracts are allow-listed, role-gated, HTTPS-only in production, and suitable for AgentCore Gateway targets.
+- **Persistent audit ledger:** runs are stored in DynamoDB with encrypted storage, TTL, and a newest-first operational index.
+- **Fail-closed configuration:** the `/readyz` endpoint returns `503` until every production control is configured.
+- **Observability and quality:** structured audit events, run traces, token accounting, deterministic safety gates, and a direct path to AgentCore Evaluations.
+- **Secure delivery:** non-root container, Terraform foundation, least-privilege Runtime role, tests, and a production-readiness runbook.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    U["Operator / Analyst / Admin"] --> API["FastAPI control plane"]
-    API --> P["Input safety + policy"]
-    P --> S["Supervisor router"]
-    S --> I["Incident specialist"]
-    S --> F["FinOps specialist"]
-    S --> SEC["Security specialist"]
-    S --> O["Operations specialist"]
-    I & F & SEC & O --> G["Governed MCP-style tool gateway"]
-    G --> T["Approved demo tools"]
-    T --> E["Trace + evaluation gates"]
-    E --> D["Control-plane dashboard"]
+    U["Authenticated caller"] --> API["FastAPI / AgentCore Runtime"]
+    API --> JWT["JWT validation and role extraction"]
+    JWT --> P["Input policy and prompt-injection controls"]
+    P --> M["Amazon Bedrock Converse supervisor"]
+    M --> G["AgentCore Gateway / approved HTTPS tools"]
+    G --> S["Read-only enterprise services"]
+    M --> T["Trace, evaluation, and structured audit event"]
+    T --> D["DynamoDB run ledger"]
+    T --> C["CloudWatch / AgentCore Observability"]
 ```
 
-## Quick start
+## Runtime modes
 
-Prerequisite: Python 3.10 or later.
+| Mode | Model and tool behavior | Intended use |
+| --- | --- | --- |
+| `development` | Local contract fixtures; no cloud credentials or external actions. | Unit tests and UI development. |
+| `production` | Real Bedrock Converse model, DynamoDB persistence, verified JWTs, and configured HTTPS tool targets. | Approved AWS deployment only. |
+
+Production mode does not silently fall back to local behavior. Missing configuration causes `/readyz` to return `503`, and an invocation fails safely.
+
+## Local development
 
 ```bash
-git clone https://github.com/YOUR_GITHUB_USERNAME/agentforge-control-plane.git
-cd agentforge-control-plane
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e ".[dev]"
 uvicorn app.main:app --reload --port 8080
 ```
 
-Open `http://127.0.0.1:8080` to use the dashboard. API docs are available at `http://127.0.0.1:8080/docs`.
+Open `http://127.0.0.1:8080` for the control-plane interface and `http://127.0.0.1:8080/docs` for the OpenAPI contract.
 
-## Demo flow
+## Production configuration
 
-Try these three requests from the dashboard:
+Copy `.env.example` into your runtime environment or secret manager. `AGENTFORGE_RUNTIME_MODE=production` requires all of these categories:
 
-| Request | Role | Expected behavior |
-| --- | --- | --- |
-| `Investigate runtime latency incident` | Operator | Incident agent calls health and runbook tools, then suggests a safe next action. |
-| `What is our cloud spend forecast?` | Analyst | FinOps agent returns budget variance and a cost-control recommendation. |
-| `Show access review status` | Admin | Security agent returns outstanding reviews without changing access. |
+1. `BEDROCK_MODEL_ID` and an IAM role permitted to invoke the enabled model.
+2. `AGENTFORGE_RUN_STORE=dynamodb` and `AGENTFORGE_RUN_TABLE`.
+3. JWT issuer, audience, and role claim configuration.
+4. Four approved HTTPS tool URLs, normally AgentCore Gateway targets.
 
-Use the same access request as an **Operator** to see authorization block the tool. Ask the system to ignore prior instructions to see the input policy block the request before any tool use.
+Do not store credentials in `.env`, source control, or browser-accessible configuration. Use IAM workload roles and AgentCore Identity for cloud and third-party credentials.
 
-## API example
+## Infrastructure and deployment
+
+Terraform provisions the durable foundation:
+
+```bash
+cd infra/terraform
+cp terraform.tfvars.example terraform.tfvars
+terraform init
+terraform plan
+terraform apply
+```
+
+It creates an encrypted DynamoDB run ledger, CloudWatch log group, and an AgentCore Runtime execution role scoped to the account and Region. Pass the Terraform output values into the AgentCore deployment configuration. The exact deployment sequence and hardening controls are in [docs/agentcore-deployment.md](docs/agentcore-deployment.md) and [docs/runbooks/production-readiness.md](docs/runbooks/production-readiness.md).
+
+AgentCore Runtime can host custom agents and AgentCore Gateway centralizes governed tool access. AWS documents the current [Runtime deployment flow](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-get-started-cli.html), [Gateway](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-using.html), [Identity](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/identity.html), and [Observability](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability.html).
+
+## API
 
 ```bash
 curl -s http://127.0.0.1:8080/api/runs \
@@ -72,9 +89,9 @@ curl -s http://127.0.0.1:8080/api/runs \
   -d '{"question":"Investigate runtime latency incident","actor_role":"operator"}'
 ```
 
-For an AgentCore Runtime-style HTTP adapter, use `POST /invocations` with `{"prompt": "..."}`. The service also exposes `GET /ping`.
+Production callers send a bearer token and must not send authority in the request body. The same service exposes `POST /invocations` and `GET /ping` for an AgentCore Runtime HTTP integration.
 
-## Quality checks
+## Verification
 
 ```bash
 python -m pytest -q
@@ -82,31 +99,16 @@ docker build -t agentforge-control-plane .
 docker run --rm -p 8080:8080 agentforge-control-plane
 ```
 
-The test suite covers the critical governance paths: incident tool use, prompt-injection blocking, and role boundary enforcement. GitHub Actions runs it on every pull request.
+Tests cover policy blocking, role boundaries, governed tool calls, the API contract, and Bedrock tool-loop behavior. The initial release corpus is in [evaluations/golden_dataset.jsonl](evaluations/golden_dataset.jsonl); use it with AgentCore Evaluations before every production promotion.
 
-## AgentCore path
-
-AgentCore Runtime is framework-agnostic and supports MCP and A2A, while Gateway provides a managed, unified entry point for agent tools. This project maps its local service boundaries to those AWS primitives, but only deploys after account, cost, and data decisions are explicitly made.
-
-Read the deployment plan in [docs/agentcore-deployment.md](docs/agentcore-deployment.md). Current AWS references: [AgentCore overview](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/), [Gateway](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-using.html), [Evaluations](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/evaluations.html), and [Observability](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability.html).
-
-## Repository layout
+## Project layout
 
 ```text
-app/                 FastAPI service, supervisor, policy, tools, evaluations
-static/              Dashboard interface
-tests/               Governance and execution tests
-docs/                AWS AgentCore deployment and hardening plan
-.github/workflows/   Continuous verification
+app/                 API, JWT auth, Bedrock runtime, policies, persistence, telemetry
+infra/terraform/     DynamoDB, CloudWatch, and least-privilege Runtime role
+docs/runbooks/        Readiness and incident procedures
+tests/               Unit and contract tests
 ```
-
-## Next production steps
-
-1. Replace demo tool responses with read-only Gateway targets.
-2. Replace request-supplied roles with AgentCore Identity / OIDC claims.
-3. Add OpenTelemetry and CloudWatch trace export.
-4. Add a golden dataset to AgentCore Evaluations and gate deployment on score thresholds.
-5. Introduce AgentCore Memory only after a data-retention and consent policy is approved.
 
 ## License
 
