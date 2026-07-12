@@ -13,6 +13,17 @@ async function loadOverview() {
   $('#policyBlocks').textContent = data.policy_blocks;
 }
 
+async function loadRuntime() {
+  const response = await fetch('/health');
+  const data = await response.json();
+  const mode = data.runtime_mode || 'development';
+  $('#runtimeMode').innerHTML = `<i></i> ${escapeHtml(mode)} runtime`;
+  if (mode === 'production') {
+    $('#actorRole').disabled = true;
+    $('#actorRole').title = 'Production roles are derived from verified JWT claims.';
+  }
+}
+
 async function loadTools() {
   const response = await fetch('/api/tools');
   const tools = await response.json();
@@ -57,4 +68,4 @@ document.querySelectorAll('.quick-prompts button').forEach((button) => button.ad
   $('#runForm').requestSubmit();
 }));
 
-Promise.all([loadOverview(), loadTools()]);
+Promise.all([loadOverview(), loadTools(), loadRuntime()]);
